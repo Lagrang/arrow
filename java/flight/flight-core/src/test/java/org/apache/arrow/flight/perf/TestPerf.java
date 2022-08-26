@@ -80,7 +80,8 @@ public class TestPerf {
   @Test
   public void throughput() throws Exception {
     final int numRuns = 10;
-    ListeningExecutorService pool = MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(4));
+    ListeningExecutorService pool =
+        MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(16));
     double [] throughPuts = new double[numRuns];
 
     for (int i = 0; i < numRuns; i++) {
@@ -90,7 +91,8 @@ public class TestPerf {
               FlightTestUtil.getStartedServer((location) -> new PerformanceTestServer(a, location));
           final FlightClient client = FlightClient.builder(a, server.getLocation()).build();
       ) {
-        final FlightInfo info = client.getInfo(getPerfFlightDescriptor(50_000_000L, 4095, 2));
+        final FlightInfo info = client.getInfo(getPerfFlightDescriptor(10_000_000L, 8192, 16));
+        Stopwatch stopwatch = Stopwatch.createStarted();
         List<ListenableFuture<Result>> results = info.getEndpoints()
             .stream()
             .map(t -> new Consumer(client, t.getTicket()))
@@ -104,8 +106,9 @@ public class TestPerf {
           }
           return res;
         }, pool).get();
+        stopwatch.stop();
 
-        double seconds = r.nanos * 1.0d / 1000 / 1000 / 1000;
+        double seconds = stopwatch.elapsed(TimeUnit.NANOSECONDS) * 1.0d / 1000 / 1000 / 1000;
         throughPuts[i] = (r.bytes * 1.0d / 1024 / 1024) / seconds;
         System.out.println(String.format(
             "Transferred %d records totaling %s bytes at %f MiB/s. %f record/s. %f batch/s.",
