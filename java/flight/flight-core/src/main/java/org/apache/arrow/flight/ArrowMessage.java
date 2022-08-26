@@ -17,6 +17,7 @@
 
 package org.apache.arrow.flight;
 
+import io.netty.buffer.PooledByteBufAllocator;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -130,14 +131,22 @@ class ArrowMessage implements AutoCloseable {
   // Pre-allocated buffers for padding serialized ArrowMessages.
   private static final List<ByteBuf> PADDING_BUFFERS = Arrays.asList(
       null,
-      Unpooled.copiedBuffer(new byte[] { 0 }),
-      Unpooled.copiedBuffer(new byte[] { 0, 0 }),
-      Unpooled.copiedBuffer(new byte[] { 0, 0, 0 }),
-      Unpooled.copiedBuffer(new byte[] { 0, 0, 0, 0 }),
-      Unpooled.copiedBuffer(new byte[] { 0, 0, 0, 0, 0 }),
-      Unpooled.copiedBuffer(new byte[] { 0, 0, 0, 0, 0, 0 }),
-      Unpooled.copiedBuffer(new byte[] { 0, 0, 0, 0, 0, 0, 0 })
+      paddingBuf(1),
+      paddingBuf(2),
+      paddingBuf(3),
+      paddingBuf(4),
+      paddingBuf(5),
+      paddingBuf(6),
+      paddingBuf(7)
   );
+
+  private static ByteBuf paddingBuf(int size) {
+    ByteBuf byteBuf = Unpooled.directBuffer(size, size);
+    byte[] padding = new byte[size];
+    Arrays.fill(padding, (byte) 0);
+    byteBuf.writeBytes(padding);
+    return byteBuf;
+  }
 
   private final IpcOption writeOption;
   private final FlightDescriptor descriptor;
@@ -435,10 +444,10 @@ class ArrowMessage implements AutoCloseable {
       cos.writeUInt32NoTag(size);
       cos.flush();
 
-      ByteBuf initialBuf = Unpooled.buffer(baos.size());
+      ByteBuf initialBuf = Unpooled.directBuffer(baos.size());
       initialBuf.writeBytes(baos.toByteArray());
       final CompositeByteBuf bb;
-      final int maxNumComponents = Math.max(2, bufs.size() + 1);
+      final int maxNumComponents = Math.max(2, allBufs.size() * 3);
       final ImmutableList<ByteBuf> byteBufs = ImmutableList.<ByteBuf>builder()
           .add(initialBuf)
           .addAll(allBufs)
