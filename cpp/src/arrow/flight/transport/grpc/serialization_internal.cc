@@ -21,10 +21,12 @@
 
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "arrow/flight/platform.h"
+#include "arrow/type_fwd.h"
 
 #if defined(_MSC_VER)
 #pragma warning(push)
@@ -52,9 +54,11 @@
 #include "arrow/device.h"
 #include "arrow/flight/serialization_internal.h"
 #include "arrow/flight/transport.h"
+#include "arrow/flight/transport/grpc/grpc_slice_buffer_input_stream.h"
 #include "arrow/flight/transport/grpc/util_internal.h"
 #include "arrow/ipc/message.h"
 #include "arrow/ipc/writer.h"
+#include "arrow/memory_pool.h"
 #include "arrow/util/bit_util.h"
 #include "arrow/util/logging.h"
 
@@ -73,16 +77,19 @@ using google::protobuf::io::CodedOutputStream;
 
 using ::grpc::ByteBuffer;
 
-bool ReadBytesZeroCopy(const std::shared_ptr<Buffer>& source_data,
-                       CodedInputStream* input, std::shared_ptr<Buffer>* out) {
+bool ReadBytesZeroCopy(CodedInputStream* input, std::shared_ptr<Buffer>* out) {
   uint32_t length;
   if (!input->ReadVarint32(&length)) {
     return false;
   }
-  auto buf =
-      SliceBuffer(source_data, input->CurrentPosition(), static_cast<int64_t>(length));
-  *out = buf;
-  return input->Skip(static_cast<int>(length));
+  arrow::Result<std::unique_ptr<Buffer>> allocated =
+      arrow::AllocateBuffer(length, kDefaultBufferAlignment);
+  if (!allocated.ok() || !input->ReadRaw((*allocated)->mutable_data(), length)) {
+    return false;
+  }
+
+  *out = std::move(*allocated);
+  return true;
 }
 
 // Internal wrapper for gRPC ByteBuffer so its memory can be exposed to Arrow
@@ -178,7 +185,7 @@ arrow::Result<::grpc::Slice> SliceFromBuffer(const std::shared_ptr<Buffer>& buf)
   return slice;
 }
 
-static const uint8_t kPaddingBytes[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+static constexpr uint8_t kPaddingBytes[kDefaultBufferAlignment] = {0};
 
 // Update the sizes of our Protobuf fields based on the given IPC payload.
 ::grpc::Status IpcMessageHeaderSize(const arrow::ipc::IpcPayload& ipc_msg, bool has_body,
@@ -231,8 +238,13 @@ static const uint8_t kPaddingBytes[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
   if (has_ipc) {
     DCHECK(has_body || ipc_msg.body_length == 0);
-    GRPC_RETURN_NOT_GRPC_OK(
-        IpcMessageHeaderSize(ipc_msg, has_body, &header_size, &metadata_size));
+    // GRPC_RETURN_NOT_GRPC_OK(
+    //     IpcMessageHeaderSize(ipc_msg, has_body, &header_size, &metadata_size));
+    ::grpc::Status _s =
+        IpcMessageHeaderSize(ipc_msg, has_body, &header_size, &metadata_size);
+    if (ARROW_PREDICT_FALSE(!_s.ok())) {
+      return _s;
+    }
     body_size = static_cast<size_t>(ipc_msg.body_length);
   }
 
@@ -298,9 +310,9 @@ static const uint8_t kPaddingBytes[8] = {0, 0, 0, 0, 0, 0, 0, 0};
         }
         slices.push_back(std::move(slice));
 
-        // Write padding if not multiple of 8
+        // Write padding if not multiple of 64
         const auto remainder = static_cast<int>(
-            bit_util::RoundUpToMultipleOf8(buffer->size()) - buffer->size());
+            bit_util::RoundUpToMultipleOf64(buffer->size()) - buffer->size());
         if (remainder) {
           slices.push_back(::grpc::Slice(kPaddingBytes, remainder));
         }
@@ -330,31 +342,39 @@ static const uint8_t kPaddingBytes[8] = {0, 0, 0, 0, 0, 0, 0, 0};
   out->metadata = nullptr;
   out->body = nullptr;
 
-  std::shared_ptr<arrow::Buffer> wrapped_buffer;
-  GRPC_RETURN_NOT_OK(GrpcBuffer::Wrap(buffer, &wrapped_buffer));
+  std::unique_ptr<::grpc::ByteBufferZeroCopyInputStream> buffer_stream;
+  auto status = ::grpc::ByteBufferZeroCopyInputStream::Create(buffer, &buffer_stream);
+  if (!status.ok()) {
+    return status;
+  }
 
-  auto buffer_length = static_cast<int>(wrapped_buffer->size());
-  CodedInputStream pb_stream(wrapped_buffer->data(), buffer_length);
-
-  pb_stream.SetTotalBytesLimit(buffer_length);
+  std::unique_ptr<CodedInputStream> pb_stream =
+      std::make_unique<CodedInputStream>(buffer_stream.get());
+  pb_stream->SetTotalBytesLimit(buffer->Length());
 
   // This is the bytes remaining when using CodedInputStream like this
-  while (pb_stream.BytesUntilTotalBytesLimit()) {
-    const uint32_t tag = pb_stream.ReadTag();
+  while (pb_stream->BytesUntilTotalBytesLimit()) {
+    const uint32_t tag = pb_stream->ReadTag();
     const int field_number = WireFormatLite::GetTagFieldNumber(tag);
     switch (field_number) {
       case pb::FlightData::kFlightDescriptorFieldNumber: {
         pb::FlightDescriptor pb_descriptor;
         uint32_t length;
-        if (!pb_stream.ReadVarint32(&length)) {
+        if (!pb_stream->ReadVarint32(&length)) {
           return ::grpc::Status(::grpc::StatusCode::INTERNAL,
                                 "Unable to parse length of FlightDescriptor");
         }
         // Can't use ParseFromCodedStream as this reads the entire
         // rest of the stream into the descriptor command field.
-        std::string buffer;
-        pb_stream.ReadString(&buffer, length);
-        if (!pb_descriptor.ParseFromString(buffer)) {
+        // std::string buffer;
+        // bool read_res = pb_stream.ReadString(&buffer, length);
+        std::vector<uint8_t> v(length);
+        bool read_res = pb_stream->ReadRaw(v.data(), length);
+        if (!read_res) {
+          return ::grpc::Status(::grpc::StatusCode::INTERNAL,
+                                "Unable to read FlightDescriptor");
+        }
+        if (!pb_descriptor.ParseFromArray(v.data(), length)) {
           return ::grpc::Status(::grpc::StatusCode::INTERNAL,
                                 "Unable to parse FlightDescriptor");
         }
@@ -364,19 +384,19 @@ static const uint8_t kPaddingBytes[8] = {0, 0, 0, 0, 0, 0, 0, 0};
         out->descriptor.reset(new arrow::flight::FlightDescriptor(descriptor));
       } break;
       case pb::FlightData::kDataHeaderFieldNumber: {
-        if (!ReadBytesZeroCopy(wrapped_buffer, &pb_stream, &out->metadata)) {
+        if (!ReadBytesZeroCopy(pb_stream.get(), &out->metadata)) {
           return ::grpc::Status(::grpc::StatusCode::INTERNAL,
                                 "Unable to read FlightData metadata");
         }
       } break;
       case pb::FlightData::kAppMetadataFieldNumber: {
-        if (!ReadBytesZeroCopy(wrapped_buffer, &pb_stream, &out->app_metadata)) {
+        if (!ReadBytesZeroCopy(pb_stream.get(), &out->app_metadata)) {
           return ::grpc::Status(::grpc::StatusCode::INTERNAL,
                                 "Unable to read FlightData application metadata");
         }
       } break;
       case pb::FlightData::kDataBodyFieldNumber: {
-        if (!ReadBytesZeroCopy(wrapped_buffer, &pb_stream, &out->body)) {
+        if (!ReadBytesZeroCopy(pb_stream.get(), &out->body)) {
           return ::grpc::Status(::grpc::StatusCode::INTERNAL,
                                 "Unable to read FlightData body");
         }
@@ -385,7 +405,7 @@ static const uint8_t kPaddingBytes[8] = {0, 0, 0, 0, 0, 0, 0, 0};
         DCHECK(false) << "cannot happen";
     }
   }
-  buffer->Clear();
+  // buffer->Clear();
 
   // TODO(wesm): Where and when should we verify that the FlightData is not
   // malformed?

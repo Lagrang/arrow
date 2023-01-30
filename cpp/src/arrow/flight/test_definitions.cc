@@ -149,6 +149,20 @@ void DataTest::CheckDoGet(
   Ticket ticket = info->endpoints()[0].ticket;
   CheckDoGet(ticket, expected_batches);
 }
+void CheckAlign(std::shared_ptr<ArrayData> col) {
+  if (!col) {
+    return;
+  }
+  for (auto buf : col->buffers) {
+    if (buf) {
+      ASSERT_EQ(buf->address() % 64, 0);
+    }
+  }
+  for (auto child : col->child_data) {
+    CheckAlign(child);
+  }
+  CheckAlign(col->dictionary);
+}
 void DataTest::CheckDoGet(const Ticket& ticket,
                           const RecordBatchVector& expected_batches) {
   auto num_batches = static_cast<int>(expected_batches.size());
@@ -168,6 +182,9 @@ void DataTest::CheckDoGet(const Ticket& ticket,
 #if !defined(__MINGW32__)
     ASSERT_BATCHES_EQUAL(*expected_batches[i], *chunk.data);
     ASSERT_BATCHES_EQUAL(*expected_batches[i], *batch);
+    for (std::shared_ptr<ArrayData> col : (*batch).column_data()) {
+      CheckAlign(col);
+    }
 #else
     // In MINGW32, the following code does not have the reproducibility at the LSB
     // even when this is called twice with the same seed.

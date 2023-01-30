@@ -190,25 +190,26 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_BACKUP}")
 # overrides to enable Flight-specific optimizations. See comments in
 # protocol_internal.cc
 set(ARROW_FLIGHT_SRCS
-    "${CMAKE_CURRENT_BINARY_DIR}/Flight.pb.cc"
-    client.cc
-    client_cookie_middleware.cc
-    client_tracing_middleware.cc
-    cookie_internal.cc
-    middleware.cc
-    serialization_internal.cc
-    server.cc
-    server_auth.cc
-    server_tracing_middleware.cc
-    transport.cc
-    transport_server.cc
-    # Bundle the gRPC impl with libarrow_flight
-    transport/grpc/grpc_client.cc
-    transport/grpc/grpc_server.cc
-    transport/grpc/serialization_internal.cc
-    transport/grpc/protocol_grpc_internal.cc
-    transport/grpc/util_internal.cc
-    types.cc)
+  "${CMAKE_CURRENT_BINARY_DIR}/Flight.pb.cc"
+  client.cc
+  client_cookie_middleware.cc
+  client_tracing_middleware.cc
+  cookie_internal.cc
+  middleware.cc
+  serialization_internal.cc
+  server.cc
+  server_auth.cc
+  server_tracing_middleware.cc
+  transport.cc
+  transport_server.cc
+  # Bundle the gRPC impl with libarrow_flight
+  transport/grpc/grpc_client.cc
+  transport/grpc/grpc_server.cc
+  transport/grpc/serialization_internal.cc
+  transport/grpc/protocol_grpc_internal.cc
+  transport/grpc/util_internal.cc
+  transport/grpc/grpc_slice_buffer_input_stream.cc
+  types.cc)
 
 if(MSVC)
   # Protobuf generated files trigger spurious warnings on MSVC.
