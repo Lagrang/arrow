@@ -247,7 +247,7 @@ class RecordBatchSerializer {
       // The buffer might be null if we are handling zero row lengths.
       if (buffer) {
         size = buffer->size();
-        padding = bit_util::RoundUpToMultipleOf64(size) - size;
+        padding = bit_util::RoundUpToPowerOf2(size, this->options_.alignment) - size;
       }
 
       buffer_meta_.push_back({offset, size});
@@ -255,7 +255,7 @@ class RecordBatchSerializer {
     }
 
     out_->body_length = offset - buffer_start_offset_;
-    DCHECK(bit_util::IsMultipleOf64(out_->body_length));
+    DCHECK(bit_util::IsMultipleOf(out_->body_length, this->options_.alignment));
 
     // Now that we have computed the locations of all of the buffers in shared
     // memory, the data header can be converted to a flatbuffer and written out
@@ -330,7 +330,8 @@ class RecordBatchSerializer {
 
       // Send padding if it's available
       const int64_t buffer_length =
-          std::min(bit_util::RoundUpToMultipleOf64(array.length() * type_width),
+          std::min(bit_util::RoundUpToPowerOf2(array.length() * type_width,
+                                               this->options_.alignment),
                    data->size() - byte_offset);
       data = SliceBuffer(data, byte_offset, buffer_length);
     }
@@ -589,7 +590,7 @@ Status WriteIpcPayload(const IpcPayload& payload, const IpcWriteOptions& options
     // The buffer might be null if we are handling zero row lengths.
     if (buffer) {
       size = buffer->size();
-      padding = bit_util::RoundUpToMultipleOf64(size) - size;
+      padding = bit_util::RoundUpToPowerOf2(size, options.alignment) - size;
     }
 
     if (size > 0) {
@@ -838,14 +839,15 @@ class SparseTensorSerializer {
     for (size_t i = 0; i < out_->body_buffers.size(); ++i) {
       const Buffer* buffer = out_->body_buffers[i].get();
       int64_t size = buffer->size();
-      int64_t padding = bit_util::RoundUpToMultipleOf8(size) - size;
+      int64_t padding =
+          bit_util::RoundUpToPowerOf2(size, this->options_.alignment) - size;
       buffer_meta_.push_back({offset, size + padding});
       offset += size + padding;
       raw_size += size;
     }
 
     out_->body_length = offset - buffer_start_offset_;
-    DCHECK(bit_util::IsMultipleOf8(out_->body_length));
+    DCHECK(bit_util::IsMultipleOf(out_->body_length, this->options_.alignment));
     out_->raw_body_length = raw_size;
 
     return SerializeMetadata(sparse_tensor);

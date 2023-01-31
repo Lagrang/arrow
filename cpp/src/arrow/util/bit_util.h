@@ -109,6 +109,8 @@ static inline int64_t NextPower2(int64_t n) {
   return n;
 }
 
+constexpr bool IsMultipleOf(int64_t n, int64_t factor) { return (n & factor) == 0; }
+
 constexpr bool IsMultipleOf64(int64_t n) { return (n & 63) == 0; }
 
 constexpr bool IsMultipleOf8(int64_t n) { return (n & 7) == 0; }
