@@ -14,17 +14,16 @@
 namespace grpc {
 class ByteBufferZeroCopyInputStream : public google::protobuf::io::ZeroCopyInputStream {
  public:
+  explicit ByteBufferZeroCopyInputStream(ByteBuffer* buffer);
   explicit ByteBufferZeroCopyInputStream(std::vector<Slice> slices);
   ByteBufferZeroCopyInputStream(const ByteBufferZeroCopyInputStream& other);
   void operator=(const ByteBufferZeroCopyInputStream& other);
-
-  static Status Create(ByteBuffer* buffer,
-                       std::unique_ptr<::grpc::ByteBufferZeroCopyInputStream>* out);
 
   bool Next(const void** data, int* size) override;
   void BackUp(int count) override;
   bool Skip(int count) override;
   int64_t ByteCount() const override;
+  int64_t Length() const;
 
  private:
   std::vector<Slice> slices_;

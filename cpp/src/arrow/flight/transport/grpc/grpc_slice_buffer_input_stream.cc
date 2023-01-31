@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstddef>
 #include <memory>
+#include <numeric>
 
 namespace grpc {
 ByteBufferZeroCopyInputStream::ByteBufferZeroCopyInputStream(std::vector<Slice> slices)
@@ -13,14 +14,12 @@ ByteBufferZeroCopyInputStream::ByteBufferZeroCopyInputStream(std::vector<Slice> 
       last_returned_size_(0),
       total_bytes_read_(0) {}
 
-Status ByteBufferZeroCopyInputStream::Create(
-    ByteBuffer* buffer, std::unique_ptr<::grpc::ByteBufferZeroCopyInputStream>* out) {
-  std::vector<Slice> slices;
-  Status res = buffer->Dump(&slices);
-  if (res.ok()) {
-    *out = std::make_unique<ByteBufferZeroCopyInputStream>(slices);
-  }
-  return res;
+ByteBufferZeroCopyInputStream::ByteBufferZeroCopyInputStream(ByteBuffer* buffer)
+    : cur_slice_idx_(0),
+      bytes_read_in_cur_slice_(0),
+      last_returned_size_(0),
+      total_bytes_read_(0) {
+  assert(buffer->Dump(&slices_).ok());
 }
 
 bool ByteBufferZeroCopyInputStream::Next(const void** data, int* size) {
@@ -28,7 +27,7 @@ bool ByteBufferZeroCopyInputStream::Next(const void** data, int* size) {
     return false;
   }
 
-  Slice slice = slices_[cur_slice_idx_];
+  const Slice& slice = slices_[cur_slice_idx_];
   *data = slice.begin() + bytes_read_in_cur_slice_;
   *size = static_cast<int>(slice.size() - bytes_read_in_cur_slice_);
 
@@ -46,7 +45,7 @@ void ByteBufferZeroCopyInputStream::BackUp(int count) {
 
   total_bytes_read_ -= count;
   cur_slice_idx_--;
-  Slice last_returned_slice = slices_[cur_slice_idx_];
+  const Slice& last_returned_slice = slices_[cur_slice_idx_];
   bytes_read_in_cur_slice_ = last_returned_slice.size() - count;
   last_returned_size_ = 0;  // Don't let caller back up further.
 }
@@ -71,4 +70,10 @@ bool ByteBufferZeroCopyInputStream::Skip(int count) {
 }
 
 int64_t ByteBufferZeroCopyInputStream::ByteCount() const { return total_bytes_read_; }
+
+int64_t ByteBufferZeroCopyInputStream::Length() const {
+  return std::accumulate(
+      slices_.begin(), slices_.end(), 0,
+      [](const int64_t& acc, const Slice& slice) { return acc + slice.size(); });
+}
 }  // namespace grpc
