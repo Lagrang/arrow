@@ -243,8 +243,6 @@ static constexpr uint8_t kPaddingBytes[kDefaultBufferAlignment] = {
 
   if (has_ipc) {
     DCHECK(has_body || ipc_msg.body_length == 0);
-    // GRPC_RETURN_NOT_GRPC_OK(
-    //     IpcMessageHeaderSize(ipc_msg, has_body, &header_size, &metadata_size));
     ::grpc::Status _s =
         IpcMessageHeaderSize(ipc_msg, has_body, &header_size, &metadata_size);
     if (ARROW_PREDICT_FALSE(!_s.ok())) {
@@ -296,6 +294,9 @@ static constexpr uint8_t kPaddingBytes[kDefaultBufferAlignment] = {
     }
 
     if (has_body) {
+      DCHECK_LE(ipc_msg.body_alignment, 64);
+      DCHECK(bit_util::IsMultipleOf8(ipc_msg.body_alignment));
+
       // Write body tag
       WireFormatLite::WriteTag(pb::FlightData::kDataBodyFieldNumber,
                                WireFormatLite::WIRETYPE_LENGTH_DELIMITED, &header_stream);
@@ -315,9 +316,10 @@ static constexpr uint8_t kPaddingBytes[kDefaultBufferAlignment] = {
         }
         slices.push_back(std::move(slice));
 
-        // Write padding if not multiple of 64
+        // Write padding if not multiple of body_alignment
         const auto remainder = static_cast<int>(
-            bit_util::RoundUpToMultipleOf64(buffer->size()) - buffer->size());
+            bit_util::RoundUpToPowerOf2(buffer->size(), ipc_msg.body_alignment) -
+            buffer->size());
         if (remainder) {
           slices.push_back(::grpc::Slice(kPaddingBytes, remainder));
         }
@@ -393,6 +395,9 @@ static constexpr uint8_t kPaddingBytes[kDefaultBufferAlignment] = {
         }
       } break;
       case pb::FlightData::kDataBodyFieldNumber: {
+        // Align body buffer on max possible 64 byte boundary. If all buffers inside the
+        // body are padded at 8/64 bytes boundary, then these buffers will also be aligned
+        // on the same 8/64 bytes boundary.
         if (!ReadBytes(&pb_stream, &out->body, kDefaultBufferAlignment)) {
           return ::grpc::Status(::grpc::StatusCode::INTERNAL,
                                 "Unable to read FlightData body");

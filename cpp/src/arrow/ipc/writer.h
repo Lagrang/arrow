@@ -59,6 +59,7 @@ struct IpcPayload {
   std::vector<std::shared_ptr<Buffer>> body_buffers;
   int64_t body_length = 0;      // serialized body length (padded, maybe compressed)
   int64_t raw_body_length = 0;  // initial uncompressed body length
+  int64_t body_alignment = 8;   // alignment/padding size for the body buffer
 };
 
 struct WriteStats {
