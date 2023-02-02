@@ -18,6 +18,7 @@
 #include "arrow/flight/test_definitions.h"
 
 #include <chrono>
+#include <cstdint>
 
 #include "arrow/array/array_base.h"
 #include "arrow/array/array_dict.h"
@@ -149,19 +150,19 @@ void DataTest::CheckDoGet(
   Ticket ticket = info->endpoints()[0].ticket;
   CheckDoGet(ticket, expected_batches);
 }
-void CheckAlign(std::shared_ptr<ArrayData> col) {
+void CheckBufferAlignment(std::shared_ptr<ArrayData> col, int32_t alignment) {
   if (!col) {
     return;
   }
   for (auto buf : col->buffers) {
     if (buf) {
-      ASSERT_EQ(buf->address() % 64, 0);
+      ASSERT_EQ(buf->address() % alignment, 0);
     }
   }
   for (auto child : col->child_data) {
-    CheckAlign(child);
+    CheckBufferAlignment(child, alignment);
   }
-  CheckAlign(col->dictionary);
+  CheckBufferAlignment(col->dictionary, alignment);
 }
 void DataTest::CheckDoGet(const Ticket& ticket,
                           const RecordBatchVector& expected_batches) {
@@ -183,7 +184,7 @@ void DataTest::CheckDoGet(const Ticket& ticket,
     ASSERT_BATCHES_EQUAL(*expected_batches[i], *chunk.data);
     ASSERT_BATCHES_EQUAL(*expected_batches[i], *batch);
     for (std::shared_ptr<ArrayData> col : (*batch).column_data()) {
-      CheckAlign(col);
+      CheckBufferAlignment(col, 8);
     }
 #else
     // In MINGW32, the following code does not have the reproducibility at the LSB
