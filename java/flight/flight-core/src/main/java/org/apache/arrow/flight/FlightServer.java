@@ -34,6 +34,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.epoll.EpollServerSocketChannel;
 import org.apache.arrow.flight.auth.ServerAuthHandler;
 import org.apache.arrow.flight.auth.ServerAuthInterceptor;
 import org.apache.arrow.flight.auth2.Auth2Constants;
@@ -231,6 +233,10 @@ public class FlightServer implements AutoCloseable {
         case LocationSchemes.GRPC:
         case LocationSchemes.GRPC_INSECURE: {
           builder = NettyServerBuilder.forAddress(location.toSocketAddress());
+          builder.bossEventLoopGroup(new EpollEventLoopGroup(Integer.parseInt(System.getProperty("netty.epoll.boss", "8"))));
+          builder.channelType(EpollServerSocketChannel.class);
+          builder.channelFactory(EpollServerSocketChannel::new);
+          builder.workerEventLoopGroup(new EpollEventLoopGroup(Integer.parseInt(System.getProperty("netty.epoll.worker", "8"))));
           break;
         }
         case LocationSchemes.GRPC_TLS: {
