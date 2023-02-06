@@ -554,7 +554,7 @@ int main(int argc, char** argv) {
   }
 
   auto client = arrow::flight::FlightClient::Connect(location, options).ValueOrDie();
-  ABORT_NOT_OK(arrow::flight::WaitForReady(client.get(), call_options));
+  // ABORT_NOT_OK(arrow::flight::WaitForReady(client.get(), call_options));
 
   arrow::Status s = arrow::flight::RunPerformanceTest(client.get(), options, call_options,
                                                       FLAGS_test_put);

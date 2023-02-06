@@ -125,7 +125,7 @@ public class FlightTestUtil {
     }
   }
 
-  static boolean isNativeTransportAvailable() {
+  public static boolean isNativeTransportAvailable() {
     return isEpollAvailable() || isKqueueAvailable();
   }
 

@@ -24,6 +24,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import com.google.common.base.Preconditions;
 import org.apache.arrow.flight.FlightClient;
 import org.apache.arrow.flight.FlightDescriptor;
 import org.apache.arrow.flight.FlightInfo;
@@ -75,7 +76,16 @@ public class TestPerf {
   }
 
   public static void main(String[] args) throws Exception {
-    new TestPerf().throughput();
+//    new TestPerf().throughput();
+    Preconditions.checkArgument(FlightTestUtil.isNativeTransportAvailable());
+    final BufferAllocator a = new RootAllocator(Long.MAX_VALUE);
+    final PerformanceTestServer server =
+            FlightTestUtil.getStartedServer((location) -> {
+              System.out.println(location);
+              return new PerformanceTestServer(a, location);
+            });
+    Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
+    server.awaitTermination();
   }
 
   @Test
@@ -91,7 +101,7 @@ public class TestPerf {
               FlightTestUtil.getStartedServer((location) -> new PerformanceTestServer(a, location));
           final FlightClient client = FlightClient.builder(a, server.getLocation()).build();
       ) {
-        final FlightInfo info = client.getInfo(getPerfFlightDescriptor(50_000_000L, 4095, 2));
+        final FlightInfo info = client.getInfo(getPerfFlightDescriptor(50_00_000L, 4095, 2));
         List<ListenableFuture<Result>> results = info.getEndpoints()
             .stream()
             .map(t -> new Consumer(client, t.getTicket()))

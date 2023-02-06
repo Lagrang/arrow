@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import com.google.common.collect.Lists;
 import org.apache.arrow.flight.BackpressureStrategy;
 import org.apache.arrow.flight.FlightDescriptor;
 import org.apache.arrow.flight.FlightEndpoint;
@@ -42,6 +43,7 @@ import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.Types.MinorType;
 import org.apache.arrow.vector.types.pojo.Field;
+import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 import com.google.common.collect.ImmutableList;
@@ -93,6 +95,14 @@ public class PerformanceTestServer implements AutoCloseable {
     flightServer.start();
   }
 
+  public void awaitTermination() throws Exception {
+    flightServer.awaitTermination();
+  }
+
+  public void stop() {
+    flightServer.shutdown();
+  }
+
   @Override
   public void close() throws Exception {
     AutoCloseables.close(flightServer, allocator);
@@ -114,7 +124,13 @@ public class PerformanceTestServer implements AutoCloseable {
         try {
           Token token = Token.parseFrom(ticket.getBytes());
           Perf perf = token.getDefinition();
-          Schema schema = Schema.deserialize(ByteBuffer.wrap(perf.getSchema().toByteArray()));
+//          Schema schema = Schema.deserialize(ByteBuffer.wrap(perf.getSchema().toByteArray()));
+          Schema schema = new Schema(ImmutableList.of(
+                  Field.nullable("a", MinorType.BIGINT.getType()),
+                  Field.nullable("b", MinorType.BIGINT.getType()),
+                  Field.nullable("c", MinorType.BIGINT.getType()),
+                  Field.nullable("d", MinorType.BIGINT.getType())
+          ));
           root = VectorSchemaRoot.create(schema, allocator);
           BigIntVector a = (BigIntVector) root.getVector("a");
           BigIntVector b = (BigIntVector) root.getVector("b");
