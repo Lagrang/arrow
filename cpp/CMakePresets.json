@@ -273,7 +273,7 @@
         "base-debug",
         "features-python-maximal"
       ],
-      "displayName": "Debug build for PyArrow with everything enabled",
+      "displayName": "Debug build for PyArrow with everything enabled (except CUDA)",
       "cacheVariables": {}
     },
     {
@@ -282,7 +282,7 @@
         "base-debug",
         "features-maximal"
       ],
-      "displayName": "Debug build with everything enabled (except benchmarks)",
+      "displayName": "Debug build with everything enabled (except benchmarks and CUDA)",
       "cacheVariables": {}
     },
     {
@@ -363,7 +363,7 @@
         "base-release",
         "features-python-maximal"
       ],
-      "displayName": "Release build for PyArrow with everything enabled",
+      "displayName": "Release build for PyArrow with everything enabled (except CUDA)",
       "cacheVariables": {}
     },
     {
@@ -372,7 +372,7 @@
         "base-release",
         "features-maximal"
       ],
-      "displayName": "Release build with everything enabled (except benchmarks)",
+      "displayName": "Release build with everything enabled (except benchmarks and CUDA)",
       "cacheVariables": {}
     },
     {
@@ -394,13 +394,39 @@
       "cacheVariables": {}
     },
     {
-      "name": "ninja-benchmarks-maximal",
+      "name": "ArrowCustom",
       "inherits": [
-        "base-benchmarks",
-        "features-maximal"
+        "base-debug"
       ],
-      "displayName": "Benchmarking build with with everything enabled",
-      "cacheVariables": {}
+      "displayName": "Local debug build with bundled dependencies",
+      "binaryDir": "build",
+      "cacheVariables": {
+        "DARROW_EXTRA_ERROR_CONTEXT": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "ARROW_DEPENDENCY_SOURCE": "BUNDLED",
+        "ARROW_BUILD_STATIC": "ON",
+        "ARROW_DATASET": "ON",
+        "ARROW_FLIGHT": "ON",
+        "ARROW_JEMALLOC": "ON",
+        "ARROW_ORC": "ON",
+        "ARROW_PARQUET": "ON",
+        "ARROW_COMPUTE": "ON",
+        "ARROW_WITH_ZSTD": "ON",
+        "ARROW_WITH_SNAPPY": "ON",
+        "ARROW_WITH_LZ4": "ON",
+        "ARROW_GANDIVA": "OFF",
+        "ARROW_CSV": "ON",
+        "PARQUET_BUILD_EXECUTABLES": "ON",
+        "ARROW_BUILD_TESTS": "ON",
+        "ARROW_BUILD_EXAMPLES": "ON",
+        "ARROW_BUILD_INTEGRATION": "ON",
+        "ARROW_BUILD_BENCHMARKS": "ON",
+        "ARROW_BUILD_UTILITIES": "ON",
+        "ARROW_USE_ASAN": "OFF",
+        "ARROW_USE_TSAN": "OFF",
+        "ARROW_USE_UBSAN": "OFF",
+        "ARROW_WITH_BACKTRACE": "ON"
+      }
     }
   ]
 }
