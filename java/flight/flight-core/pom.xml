@@ -98,6 +98,13 @@
       <groupId>io.grpc</groupId>
       <artifactId>grpc-api</artifactId>
     </dependency>
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-transport-native-epoll</artifactId>
+      <version>4.1.87.Final</version>
+      <classifier>linux-x86_64</classifier>
+    </dependency>
+
 
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
