@@ -25,12 +25,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import com.google.common.base.Preconditions;
-import org.apache.arrow.flight.FlightClient;
-import org.apache.arrow.flight.FlightDescriptor;
-import org.apache.arrow.flight.FlightInfo;
-import org.apache.arrow.flight.FlightStream;
-import org.apache.arrow.flight.FlightTestUtil;
-import org.apache.arrow.flight.Ticket;
+import org.apache.arrow.flight.*;
 import org.apache.arrow.flight.perf.impl.PerfOuterClass.Perf;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
@@ -81,8 +76,11 @@ public class TestPerf {
     final BufferAllocator a = new RootAllocator(Long.MAX_VALUE);
     final PerformanceTestServer server =
             FlightTestUtil.getStartedServer((location) -> {
-              System.out.println(location);
-              return new PerformanceTestServer(a, location);
+              final Location loc = Location.forGrpcInsecure(
+                      System.getProperty("flight.bind_address", "0.0.0.0"),
+                      Integer.parseInt(System.getProperty("flight.bind_port", "6568")));
+              System.out.println(loc);
+              return new PerformanceTestServer(a, loc);
             });
     Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
     server.awaitTermination();
