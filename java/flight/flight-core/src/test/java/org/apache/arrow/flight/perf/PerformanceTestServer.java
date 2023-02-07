@@ -58,6 +58,7 @@ public class PerformanceTestServer implements AutoCloseable {
   private final BufferAllocator allocator;
   private final PerfProducer producer;
   private final boolean isNonBlocking;
+  private static final boolean backpressureEnabled = Boolean.parseBoolean(System.getProperty("flight.backpressure", "false"));
 
   public PerformanceTestServer(BufferAllocator incomingAllocator, Location location) {
     this(incomingAllocator, location, new BackpressureStrategy() {
@@ -70,9 +71,9 @@ public class PerformanceTestServer implements AutoCloseable {
 
       @Override
       public WaitResult waitForListener(long timeout) {
-//        while (!listener.isReady() && !listener.isCancelled()) {
-//          // busy wait
-//        }
+        while (backpressureEnabled && !listener.isReady() && !listener.isCancelled()) {
+          // busy wait
+        }
         return WaitResult.READY;
       }
     }, false);
