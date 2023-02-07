@@ -59,7 +59,7 @@ public class FlightTestUtil {
         throw new RuntimeException("Unable to create a ServerSocket instance. ", e);
       }
 
-      final Location location = Location.forGrpcInsecure(LOCALHOST, port);
+      final Location location = Location.forGrpcInsecure("0.0.0.0", port);
       lastThrown = null;
       try {
         server = newServerFromLocation.apply(location);
